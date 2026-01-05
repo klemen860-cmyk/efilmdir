@@ -3,50 +3,21 @@ header("Access-Control-Allow-Origin: *");
 
 if (isset($_GET['id'])) {
     $url = $_GET['id'];
-    
-    // URL'den hangi site olduğunu anla
-    $host = parse_url($url, PHP_URL_HOST);
 
-    // Eğer doğrudan m3u8 linki ise veya korumalı bir site ise Proxy/Tünel moduna gir
-    if (strpos($url, '.m3u8') !== false || strpos($url, 'dizipal') !== false) {
+    // Eğer link doğrudan .m3u8 ise, PotPlayer/VLC için özel M3U formatı oluştur
+    if (strpos($url, '.m3u8') !== false) {
+        header('Content-Type: application/x-mpegurl');
+        header('Content-Disposition: attachment; filename="play.m3u"');
         
-        // Siteye göre dinamik Referer belirle
-        $referer = "https://google.com/";
-        if (strpos($url, 'trgoals') !== false) $referer = "https://trgoals1495.xyz/";
-        if (strpos($url, 'dizipal') !== false) $referer = "https://dizipal.website/";
-
-        $options = [
-            "http" => [
-                "method" => "GET",
-                "header" => "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36\r\n" .
-                            "Referer: $referer\r\n" .
-                            "Origin: " . rtrim($referer, '/') . "\r\n"
-            ]
-        ];
-        
-        $context = stream_context_create($options);
-        $content = @file_get_contents($url, false, $context);
-        
-        if ($content) {
-            // Eğer bu bir m3u8 dosyası ise doğrudan içeriği bas (Tünelle)
-            if (strpos($url, '.m3u8') !== false) {
-                header("Content-Type: application/vnd.apple.mpegurl");
-                echo $content;
-                exit;
-            }
-            
-            // Eğer bu bir HTML sayfasıysa (Dizipal sayfası gibi), içindeki linki ara
-            preg_match('/https?(?::|\\\\:)\/\/(?:[^"\']|\\\\\/)+\.(?:m3u8|mp4|mkv)(?:[^"\']|\\\\\/)*/', $content, $matches);
-            if (isset($matches[0])) {
-                $videoUrl = str_replace('\/', '/', $matches[0]);
-                // Bulduğun video linkini tekrar kendi sunucun üzerinden (id ile) çalıştır ki koruma aşılmaya devam etsin
-                header("Location: ?id=" . urlencode($videoUrl), true, 301);
-                exit;
-            }
-        }
+        echo "#EXTM3U\n";
+        echo "#EXTINF:-1,Canli Yayin\n";
+        echo "#EXTVLCOPT:http-referrer=https://trgoals1495.xyz/\n";
+        echo "#EXTVLCOPT:http-user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36\n";
+        echo $url;
+        exit;
     }
 
-    // Klasik yöntem (ag2m4 gibi siteler için hızlı yönlendirme)
+    // Normal web sayfaları (ag2m4 vb.) için arama yapmaya devam et
     $options = ["http" => ["header" => "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)\r\n"]];
     $context = stream_context_create($options);
     $content = @file_get_contents($url, false, $context);
@@ -55,7 +26,12 @@ if (isset($_GET['id'])) {
         preg_match('/https?(?::|\\\\:)\/\/(?:[^"\']|\\\\\/)+\.(?:m3u8|mp4|mkv)(?:[^"\']|\\\\\/)*/', $content, $matches);
         if (isset($matches[0])) {
             $videoUrl = str_replace('\/', '/', $matches[0]);
-            header("Location: " . $videoUrl, true, 301);
+            // Bulunan link .m3u8 ise sistemi başa döndür (Referer eklemesi için)
+            if (strpos($videoUrl, '.m3u8') !== false) {
+                header("Location: ?id=" . urlencode($videoUrl), true, 301);
+            } else {
+                header("Location: " . $videoUrl, true, 301);
+            }
             exit;
         }
     }
