@@ -1,42 +1,77 @@
 <?php
 header("Access-Control-Allow-Origin: *");
 
-if (isset($_GET['id'])) {
-    $url = $_GET['id'];
-    
-    // 1. ADIM: Siteye uygun anahtarları (Referer) hazırla
-    $referer = "https://google.com/";
-    if (strpos($url, 'trgoals') !== false) $referer = "https://trgoals1495.xyz/";
-    if (strpos($url, 'dizipal') !== false) $referer = "https://dizipal.website/";
-
-    $options = [
-        "http" => [
-            "method" => "GET",
-            "header" => "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36\r\n" .
-                        "Referer: $referer\r\n"
-        ]
-    ];
-    $context = stream_context_create($options);
-    
-    // 2. ADIM: Sayfayı tara ve video linkini bul
-    $content = @file_get_contents($url, false, $context);
-
-    if ($content) {
-        // Hem normal hem de gizli (\/) linkleri bulan en güçlü Regex
-        preg_match('/https?(?::|\\\\:)\/\/(?:[^"\']|\\\\\/)+\.(?:m3u8|mp4|mkv)(?:[^"\']|\\\\\/)*/', $content, $matches);
-        
-        if (isset($matches[0])) {
-            $videoUrl = str_replace('\/', '/', $matches[0]);
-            
-            // 3. ADIM: PotPlayer'a temiz yönlendirme yap (En garantisi budur)
-            header("Location: " . $videoUrl, true, 301);
-            exit;
-        }
-    }
-    
-    // Bulamazsa mecbur orijinal linke gönder
-    header("Location: " . $url, true, 301);
-} else {
+if (!isset($_GET['id'])) {
     echo "Sistem Resetlendi. Ag2m4 ve Digerleri Hazir.";
+    exit;
 }
-?>
+
+$url = $_GET['id'];
+
+/* =====================
+   REFERER TESPİTİ
+===================== */
+$referer = "https://google.com/";
+
+if (strpos($url, 'trgoals') !== false)
+    $referer = "https://trgoals1495.xyz/";
+
+if (strpos($url, 'dizipal') !== false)
+    $referer = "https://dizipal.website/";
+
+if (strpos($url, 'dplayer82') !== false)
+    $referer = "https://sn.dplayer82.site/";
+
+/* =====================
+   SAYFAYI ÇEK
+===================== */
+$opts = [
+    "http" => [
+        "method" => "GET",
+        "header" =>
+            "User-Agent: Mozilla/5.0\r\n" .
+            "Referer: $referer\r\n"
+    ]
+];
+
+$context = stream_context_create($opts);
+$content = @file_get_contents($url, false, $context);
+
+/* =====================
+   m3u8 AVLA
+===================== */
+$videoUrl = null;
+
+if ($content) {
+
+    // 1️⃣ Direkt m3u8
+    if (preg_match('/https?:\/\/[^"\']+\.m3u8[^"\']*/i', $content, $m))
+        $videoUrl = $m[0];
+
+    // 2️⃣ Kaçışlı m3u8
+    if (!$videoUrl && preg_match('/https?(?::|\\\\:)\/\/(?:[^"\']|\\\\\/)+\.m3u8/i', $content, $m))
+        $videoUrl = str_replace('\/', '/', $m[0]);
+
+    // 3️⃣ base64 içinde m3u8
+    if (!$videoUrl && preg_match('/atob\([\'"]([^\'"]+)[\'"]\)/', $content, $m)) {
+        $decoded = base64_decode($m[1]);
+        if (preg_match('/https?:\/\/[^"\']+\.m3u8/i', $decoded, $mm))
+            $videoUrl = $mm[0];
+    }
+}
+
+/* =====================
+   OYNATICIYA VER
+===================== */
+if ($videoUrl) {
+
+    header("Content-Type: application/vnd.apple.mpegurl");
+    header("Location: $videoUrl", true, 302);
+    exit;
+}
+
+/* =====================
+   SON ÇARE
+===================== */
+header("Location: $url", true, 302);
+exit;
