@@ -29,7 +29,7 @@ $opts = [
     "http" => [
         "method" => "GET",
         "header" =>
-            "User-Agent: Mozilla/5.0\r\n" .
+            "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)\r\n" .
             "Referer: $referer\r\n"
     ]
 ];
@@ -58,13 +58,16 @@ if ($content) {
         if (preg_match('/https?:\/\/[^"\']+\.m3u8/i', $decoded, $mm))
             $videoUrl = $mm[0];
     }
+
+    // 🔥 4️⃣ DİZİPAL İÇİN GEREKLİ OLAN EK (file: "m3u8")
+    if (!$videoUrl && preg_match('/file\s*:\s*[\'"]([^\'"]+\.m3u8[^\'"]*)/i', $content, $m))
+        $videoUrl = $m[1];
 }
 
 /* =====================
    OYNATICIYA VER
 ===================== */
 if ($videoUrl) {
-
     header("Content-Type: application/vnd.apple.mpegurl");
     header("Location: $videoUrl", true, 302);
     exit;
