@@ -22,6 +22,10 @@ if (strpos($url, 'dizipal') !== false)
 if (strpos($url, 'dplayer82') !== false)
     $referer = "https://sn.dplayer82.site/";
 
+// AG2M4 Referer Eklememesi İçin (Altyazı erişimi için gerekebilir)
+if (strpos($url, 'ag2m4') !== false)
+    $referer = "https://ag2m4.cfd/";
+
 /* =====================
    SAYFAYI ÇEK
 ===================== */
@@ -38,35 +42,38 @@ $context = stream_context_create($opts);
 $content = @file_get_contents($url, false, $context);
 
 /* =====================
-   m3u8 AVLA
+   VERİ AVLA (m3u8 ve vtt)
 ===================== */
 $videoUrl = null;
+$subtitleUrl = null;
 
 if ($content) {
 
-    // 1️⃣ Direkt m3u8
+    // 1️⃣ m3u8 Bulma (Orijinal Mantık)
     if (preg_match('/https?:\/\/[^"\']+\.m3u8[^"\']*/i', $content, $m))
         $videoUrl = $m[0];
 
-    // 2️⃣ Kaçışlı m3u8
-    if (!$videoUrl && preg_match('/https?(?::|\\\\:)\/\/(?:[^"\']|\\\\\/)+\.m3u8/i', $content, $m))
-        $videoUrl = str_replace('\/', '/', $m[0]);
-
-    // 3️⃣ base64 içinde m3u8
-    if (!$videoUrl && preg_match('/atob\([\'"]([^\'"]+)[\'"]\)/', $content, $m)) {
-        $decoded = base64_decode($m[1]);
-        if (preg_match('/https?:\/\/[^"\']+\.m3u8/i', $decoded, $mm))
-            $videoUrl = $mm[0];
-    }
-
-    // 🔥 4️⃣ DİZİPAL İÇİN GEREKLİ OLAN EK (file: "m3u8")
     if (!$videoUrl && preg_match('/file\s*:\s*[\'"]([^\'"]+\.m3u8[^\'"]*)/i', $content, $m))
         $videoUrl = $m[1];
+
+    // 2️⃣ Altyazı (vtt) Bulma (YENİ EK)
+    // Embed içindeki altyazı dosyasını yakalar
+    if (preg_match('/(?:file|src|label)\s*[:=]\s*[\'"]([^\'"]+\.vtt[^\'"]*)[\'"]/i', $content, $sub)) {
+        $subtitleUrl = $sub[1];
+        if (strpos($subtitleUrl, '//') === 0) $subtitleUrl = "https:" . $subtitleUrl;
+    }
 }
 
 /* =====================
    OYNATICIYA VER
 ===================== */
+
+// Eğer bir altyazı bulunduysa, bazı akıllı oynatıcıların (VLC/MX) 
+// tanıması için başlık (header) olarak ekliyoruz.
+if ($subtitleUrl) {
+    header("X-Subtitle-URL: $subtitleUrl");
+}
+
 if ($videoUrl) {
     header("Content-Type: application/vnd.apple.mpegurl");
     header("Location: $videoUrl", true, 302);
