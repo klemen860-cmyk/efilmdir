@@ -1,0 +1,35 @@
+name: Günlük Film Listesi Güncelleme
+
+on:
+  schedule:
+    # Her gün Türkiye saati ile gece 03:00 civarı çalışır (UTC 00:00)
+    - cron: '0 0 * * *'
+  workflow_dispatch: # İstediğinizde manuel çalıştırmak için
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Depoyu Kontrol Et
+      uses: actions/checkout@v3
+
+    - name: Python Kurulumu
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+
+    - name: Bağımlılıkları Yükle
+      run: |
+        pip install requests
+
+    - name: Scripti Çalıştır
+      run: python filmcek.py
+
+    - name: Değişiklikleri Kaydet ve Pushla
+      run: |
+        git config --local user.email "github-actions[bot]@users.noreply.github.com"
+        git config --local user.name "github-actions[bot]"
+        git add film_kod.json master.m3u
+        git commit -m "Günlük Otomatik Güncelleme: $(date +'%Y-%m-%d %H:%M')" || exit 0
+        git push
