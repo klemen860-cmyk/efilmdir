@@ -1,11 +1,16 @@
 import json
 import requests
 import os
+from dotenv import load_dotenv
 
-# --- TMDB API ANAHTARI (KOD İÇİNDE GÖRÜNÜR) ---
-TMDB_API_KEY = "98c315f0bc15f70579cf309bb0f83d59"
+# .env dosyasındaki değişkenleri yükle (Eğer varsa)
+load_dotenv()
 
-# 1. Tür Listesi (API ID'leri ile eşleşenler)
+# API anahtarını sistem değişkenlerinden veya .env dosyasından çek
+# Paylaşırken buraya anahtar yazmanıza gerek kalmaz.
+TMDB_API_KEY = os.getenv("TMDB_API_KEY")
+
+# 1. Yerel Tür Listesi
 genre_map = {
     "68a4278ee0a6ba718de9f515": "Western", "68a42728e0a6ba718de9f0f9": "Tarih",
     "68a427a1e0a6ba718de9f5f0": "Gençlik", "68a87b7867e20e9a90a3debc": "Aile",
@@ -22,7 +27,7 @@ genre_map = {
 }
 
 def get_genre_by_imdb_id(imdb_id):
-    """IMDb ID kullanarak TMDb'den kesin tür bilgisini çeker."""
+    """IMDb ID kullanarak TMDB'den tür bilgisini çeker."""
     if not TMDB_API_KEY or not imdb_id or not imdb_id.startswith('tt'):
         return None
     try:
@@ -47,18 +52,20 @@ def fetch_and_convert():
     headers = {'User-Agent': 'Mozilla/5.0'}
     
     try:
+        if not TMDB_API_KEY:
+            print("UYARI: TMDB_API_KEY bulunamadı. Bazı filmler 'DRAM' olarak kategorize edilebilir.")
+
         print("Veri indiriliyor ve 'film_kod.json' kaydediliyor...")
         response = requests.get(api_url, headers=headers, timeout=120)
         data = response.json()
         
-        # İstediğin üzerine JSON dosyasını kaydediyoruz
         with open('film_kod.json', 'w', encoding='utf-8') as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
             
         movies = data.get('movies', [])
         processed_movies = []
 
-        print(f"Toplam {len(movies)} film işleniyor. 'GENEL' olanlar TMDb üzerinden dağıtılıyor...")
+        print(f"Toplam {len(movies)} film işleniyor...")
         
         for movie in movies:
             title = str(movie.get('title') or "")
@@ -74,19 +81,18 @@ def fetch_and_convert():
             genre_name = ""
             genres = movie.get('genres') or []
             
-            # 1. Önce API'deki mevcut ID'lerden türü bulmayı dene
+            # 1. Mevcut listeden kontrol et
             if isinstance(genres, list):
                 for g_id in genres:
                     if g_id in genre_map:
                         genre_name = genre_map[g_id].upper()
                         break
             
-            # 2. Eğer tür bulunamadıysa (BOŞ veya GENEL kalacaksa) TMDb'den ÇEK
+            # 2. Tür yoksa (GENEL kalmasın diye) TMDB'den bul
             if not genre_name:
                 tmdb_res = get_genre_by_imdb_id(imdb_id)
-                # Eğer TMDb'de bile bulunamazsa çok nadir durumlar için "DRAM" veya "DİĞER" atanabilir
-                # Ama GENEL istemediğin için TMDb sonucunu zorunlu kılıyoruz.
-                genre_name = tmdb_res if tmdb_res else "DRAM" # TMDb'de yoksa en yaygın türü ata
+                # GENEL başlığı istemediğin için bulamazsa DRAM ata
+                genre_name = tmdb_res if tmdb_res else "DRAM"
 
             group_title = f"{origin_text} {genre_name} FiLMLERi 🎬"
             
@@ -99,10 +105,8 @@ def fetch_and_convert():
                 "imdb_id": imdb_id
             })
 
-        # --- SIRALAMA MANTIĞI ---
         processed_movies.sort(key=lambda x: (x['group'], -int(x['year']) if x['year'].isdigit() else 0))
 
-        # M3U formatına dönüştür
         output = ["#EXTM3U"]
         for m in processed_movies:
             output.append(f'#EXTINF:-1 tvg-logo="{m["poster"]}" group-title="{m["group"]}",{m["title"]} ({m["year"]}) | IMDb ⭐{m["rating"]}')
@@ -111,7 +115,7 @@ def fetch_and_convert():
         with open('master.m3u', 'w', encoding='utf-8') as f:
             f.write("\n".join(output))
             
-        print("İşlem Başarılı! 'film_kod.json' ve 'master.m3u' dosyaları oluşturuldu.")
+        print("İşlem Başarılı! 'film_kod.json' ve 'master.m3u' oluşturuldu.")
 
     except Exception as e:
         print(f"Hata: {e}")
