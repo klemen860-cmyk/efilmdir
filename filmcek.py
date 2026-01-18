@@ -3,13 +3,14 @@ import requests
 import os
 from dotenv import load_dotenv
 
-# .env dosyasındaki değişkenleri yükle
+# .env dosyasındaki değişkenleri yükle (Eğer varsa)
 load_dotenv()
 
 # API anahtarını sistem değişkenlerinden veya .env dosyasından çek
+# Paylaşırken buraya anahtar yazmanıza gerek kalmaz.
 TMDB_API_KEY = os.getenv("TMDB_API_KEY")
 
-# 1. Tür Listesi
+# 1. Yerel Tür Listesi
 genre_map = {
     "68a4278ee0a6ba718de9f515": "Western", "68a42728e0a6ba718de9f0f9": "Tarih",
     "68a427a1e0a6ba718de9f5f0": "Gençlik", "68a87b7867e20e9a90a3debc": "Aile",
@@ -51,7 +52,10 @@ def fetch_and_convert():
     headers = {'User-Agent': 'Mozilla/5.0'}
     
     try:
-        print("Veri indiriliyor...")
+        if not TMDB_API_KEY:
+            print("UYARI: TMDB_API_KEY bulunamadı. Bazı filmler 'DRAM' olarak kategorize edilebilir.")
+
+        print("Veri indiriliyor ve 'film_kod.json' kaydediliyor...")
         response = requests.get(api_url, headers=headers, timeout=120)
         data = response.json()
         
@@ -61,37 +65,33 @@ def fetch_and_convert():
         movies = data.get('movies', [])
         processed_movies = []
 
-        print(f"Toplam {len(movies)} film analiz ediliyor...")
+        print(f"Toplam {len(movies)} film işleniyor...")
         
         for movie in movies:
-            origin_raw = str(movie.get('origin_type') or "yabanci").lower()
-            lang_type = str(movie.get('language_type') or "")
-            is_yerli = "yerli" in origin_raw
-
-            # FİLTRE: Eğer film yerli DEĞİLSE ve Dublaj & Altyazı DEĞİLSE atla
-            if not is_yerli and lang_type != "Dublaj & Altyazı":
-                continue
-            
             title = str(movie.get('title') or "")
             year = str(movie.get('year') or "0")
             imdb_id = str(movie.get('imdb_id') or "")
             rating = str(movie.get('imdb_rating') or "0.0")
+            origin_raw = str(movie.get('origin_type') or "yabanci").lower()
+            
+            is_yerli = "yerli" in origin_raw
             origin_text = "YERLi" if is_yerli else "YABANCI"
             poster = str(movie.get('poster_url') or "").replace('.avif', '.jpg')
             
             genre_name = ""
             genres = movie.get('genres') or []
             
-            # 1. API'den gelen tür kodlarına bak
+            # 1. Mevcut listeden kontrol et
             if isinstance(genres, list):
                 for g_id in genres:
                     if g_id in genre_map:
                         genre_name = genre_map[g_id].upper()
                         break
             
-            # 2. Tür hala bulunamadıysa TMDB'den çek (GENEL başlığına düşmesin)
+            # 2. Tür yoksa (GENEL kalmasın diye) TMDB'den bul
             if not genre_name:
                 tmdb_res = get_genre_by_imdb_id(imdb_id)
+                # GENEL başlığı istemediğin için bulamazsa DRAM ata
                 genre_name = tmdb_res if tmdb_res else "DRAM"
 
             group_title = f"{origin_text} {genre_name} FiLMLERi 🎬"
@@ -105,10 +105,8 @@ def fetch_and_convert():
                 "imdb_id": imdb_id
             })
 
-        # Kategori ve yıla göre sırala
         processed_movies.sort(key=lambda x: (x['group'], -int(x['year']) if x['year'].isdigit() else 0))
 
-        # M3U Yazımı
         output = ["#EXTM3U"]
         for m in processed_movies:
             output.append(f'#EXTINF:-1 tvg-logo="{m["poster"]}" group-title="{m["group"]}",{m["title"]} ({m["year"]}) | IMDb ⭐{m["rating"]}')
@@ -117,7 +115,7 @@ def fetch_and_convert():
         with open('master.m3u', 'w', encoding='utf-8') as f:
             f.write("\n".join(output))
             
-        print(f"Bitti! Toplam {len(processed_movies)} film (Yerli + Dublaj & Altyazı) listelendi.")
+        print("İşlem Başarılı! 'film_kod.json' ve 'master.m3u' oluşturuldu.")
 
     except Exception as e:
         print(f"Hata: {e}")
