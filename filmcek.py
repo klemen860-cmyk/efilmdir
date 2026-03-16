@@ -19,7 +19,7 @@ genre_map = {
 }
 
 def fetch_and_convert():
-    api_url = "https://yabancidizibox.com/api/discover?contentType=movie&limit=50000"
+    api_url = "https://dizifilm.org/api/discover?contentType=movie&limit=50000"
     headers = {'User-Agent': 'Mozilla/5.0'}
     
     try:
